@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LASER VLC Audio — Visible Light Communication</title>
+  <meta name="description" content="Transmit analog audio over a laser beam using Visible Light Communication (VLC) with ESP32 hardware." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── Ambient background ──────────────────────────────────────────────── -->
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- ── Laser beam animation ───────────────────────────────────────────── -->
+<div class="laser-beam" id="laserBeam">
+  <div class="beam-line"></div>
+  <div class="beam-particles" id="beamParticles"></div>
+</div>
+
+<!-- ── Main layout ────────────────────────────────────────────────────── -->
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="logo-icon">⚡</span>
+      <div>
+        <h1 class="logo-title">LASER VLC</h1>
+        <p class="logo-sub">Visible Light Communication</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="server-badge" id="serverBadge">
+        <span class="pulse-dot"></span>
+        <span id="serverStatusText">Connecting…</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Device Connection Cards -->
+  <section class="devices-section">
+    <h2 class="section-title">Device Status</h2>
+    <div class="devices-grid">
+
+      <!-- TX Card -->
+      <div class="device-card" id="txCard">
+        <div class="device-icon tx-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+        </div>
+        <div class="device-info">
+          <span class="device-label">ESP32 Transmitter (TX)</span>
+          <span class="device-sublabel">GPIO 25 → Laser Driver</span>
+        </div>
+        <div class="device-status" id="txStatus">
+          <span class="status-dot offline"></span>
+          <span class="status-text" id="txStatusText">Offline</span>
+        </div>
+      </div>
+
+      <!-- RX Card -->
+      <div class="device-card" id="rxCard">
+        <div class="device-icon rx-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+          </svg>
+        </div>
+        <div class="device-info">
+          <span class="device-label">ESP32 Receiver (RX)</span>
+          <span class="device-sublabel">GPIO 34 ← TIA (LM358)</span>
+        </div>
+        <div class="device-status" id="rxStatus">
+          <span class="status-dot offline"></span>
+          <span class="status-text" id="rxStatusText">Offline</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Main Panel -->
+  <main class="main-panel">
+
+    <!-- Left: Audio TX Panel -->
+    <div class="panel tx-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="panel-icon">📤</span>
+          Transmit Audio
+        </h2>
+        <span class="panel-badge">TX</span>
+      </div>
+
+      <!-- Audio File Drop Zone -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">🎵</div>
+        <p class="drop-title">Drop audio file here</p>
+        <p class="drop-sub">or click to browse</p>
+        <p class="drop-types">WAV · MP3 · OGG · FLAC</p>
+        <input type="file" id="audioFileInput" accept="audio/*" hidden />
+      </div>
+
+      <!-- Selected File Info -->
+      <div class="file-info" id="fileInfo" style="display:none">
+        <div class="file-icon">🎶</div>
+        <div class="file-meta">
+          <span class="file-name" id="fileName"></span>
+          <span class="file-size" id="fileSize"></span>
+        </div>
+        <button class="file-remove" id="fileRemove" title="Remove">✕</button>
+      </div>
+
+      <!-- Waveform Visualizer -->
+      <div class="waveform-container">
+        <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+        <div class="waveform-labels">
+          <span>Waveform</span>
+          <span id="waveformTime">0:00</span>
+        </div>
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="playback-controls">
+        <div class="time-display">
+          <span id="currentTime">0:00</span>
+          <div class="seek-bar-wrap">
+            <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0" step="0.1" />
+          </div>
+          <span id="totalTime">0:00</span>
+        </div>
+        <div class="control-buttons">
+          <button class="ctrl-btn" id="btnSkipBack" title="Skip back 5s">⏮</button>
+          <button class="ctrl-btn play-btn" id="btnPlay" disabled title="Play / Pause">▶</button>
+          <button class="ctrl-btn" id="btnSkipFwd" title="Skip forward 5s">⏭</button>
+        </div>
+        <div class="volume-row">
+          <span>🔊</span>
+          <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="0.5" />
+        </div>
+      </div>
+
+      <!-- Transmission Controls -->
+      <div class="tx-controls">
+        <div class="sample-rate-info">
+          <span class="sr-label">Sample Rate</span>
+          <span class="sr-value">8 kHz (LM358 optimized)</span>
+        </div>
+        <button class="send-btn" id="btnSend" disabled>
+          <span class="send-icon">⚡</span>
+          <span id="sendBtnText">Send via Laser</span>
+          <div class="send-progress" id="sendProgress"></div>
+        </button>
+        <button class="stop-btn" id="btnStop" disabled>⏹ Stop Transmission</button>
+      </div>
+    </div>
+
+    <!-- Right: Audio RX Panel -->
+    <div class="panel rx-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="panel-icon">📥</span>
+          Receive Audio
+        </h2>
+        <span class="panel-badge rx-badge">RX</span>
+      </div>
+
+      <!-- Live RX Oscilloscope -->
+      <div class="scope-container">
+        <div class="scope-header">
+          <span class="scope-label">Live Oscilloscope</span>
+          <span class="scope-freq">8 kHz ADC</span>
+          <div class="scope-led" id="scopeLed"></div>
+        </div>
+        <canvas id="scopeCanvas" class="scope-canvas"></canvas>
+        <div class="scope-axes">
+          <div class="scope-y-label">Amplitude</div>
+          <div class="scope-x-label">Time →</div>
+        </div>
+      </div>
+
+      <!-- RX Spectrum Analyzer -->
+      <div class="spectrum-container">
+        <div class="spectrum-header">
+          <span>Frequency Spectrum</span>
+          <span id="dominantFreq">—</span>
+        </div>
+        <canvas id="spectrumCanvas" class="spectrum-canvas"></canvas>
+      </div>
+
+      <!-- RX Playback -->
+      <div class="rx-playback">
+        <div class="rx-playback-header">
+          <span class="rx-play-label">Received Audio Playback</span>
+          <div class="rx-controls">
+            <button class="rx-btn" id="btnRxPlay" disabled title="Play received audio">▶ Play</button>
+            <button class="rx-btn" id="btnRxSave" disabled title="Save received audio">💾 Save</button>
+            <button class="rx-btn danger" id="btnRxClear" title="Clear buffer">🗑 Clear</button>
+          </div>
+        </div>
+        <div class="rx-buffer-bar">
+          <div class="rx-buffer-fill" id="rxBufferFill"></div>
+        </div>
+        <span class="rx-buffer-label" id="rxBufferLabel">Buffer: 0 KB</span>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value" id="statTxBytes">0</span>
+          <span class="stat-label">TX Bytes Sent</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statRxBytes">0</span>
+          <span class="stat-label">RX Bytes Recv</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statElapsed">0s</span>
+          <span class="stat-label">Session Time</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statBitrate">0</span>
+          <span class="stat-label">Link kbps</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Log Panel -->
+  <section class="log-section">
+    <div class="log-header">
+      <span class="log-title">📋 System Log</span>
+      <button class="log-clear-btn" id="btnClearLog">Clear</button>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </section>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
